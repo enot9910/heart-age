@@ -1,0 +1,12 @@
+[tool.poetry]
+name = "heart-age-clock"
+version = "0.0.1"
+authors = ["Tatiana Khabarova", "Mikhail Krivonosov"]
+description = "A package for building heart age clock"
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+
+[build-system]
+requires = ["poetry-core>=1.0.8"]
+build-backend = "poetry.core.masonry.api"
