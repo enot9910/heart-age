@@ -18,6 +18,40 @@ def prepare_wave_data(waves_peak_info):
     
     return waves_data
 
+def calc_nan_wave_data(waves_peak_info):
+    waves_data = waves_peak_info.copy()
+    point_types = [
+        'ECG_P_Onsets', 'ECG_P_Peaks', 'ECG_P_Offsets',
+        'ECG_R_Onsets', 'ECG_Q_Peaks', 'ECG_R_Peaks', 
+        'ECG_S_Peaks', 'ECG_R_Offsets',
+        'ECG_T_Onsets', 'ECG_T_Peaks', 'ECG_T_Offsets'
+    ]
+    
+    r_peaks_length = len(waves_data.get('ECG_R_Peaks', []))
+    
+    results = {}
+    
+    for point_type in point_types:
+        if point_type in waves_data:
+            points = np.array(waves_data[point_type], dtype=float)
+            
+            nan_count = np.sum(np.isnan(points))
+            length_diff = max(0, r_peaks_length - len(points))
+            
+            if len(points) >= r_peaks_length:
+                results[f"{point_type}_nan"] = int(nan_count)
+                results[f"{point_type}_missing"] = 0
+            else:
+                results[f"{point_type}_nan"] = int(nan_count)
+                results[f"{point_type}_missing"] = length_diff
+        else:
+            results[f"{point_type}_nan"] = 0
+            results[f"{point_type}_missing"] = r_peaks_length
+
+    results['total_r_peaks'] = r_peaks_length
+    
+    return results
+
 def group_pqrst_points(waves_data):
     all_points = []
     for point_type, points in waves_data.items():
@@ -406,7 +440,7 @@ def compute_stats(values, prefix="", only_median=False):
     
     return stats
 
-def calculate_statistics(grouped_cycles, only_median=False):
+def calculate_statistics(grouped_cycles, avg_signal=False):
     feature_categories = ['amplitudes', 'intervals', 'diff_amplitudes', 'areas', 'area_ratios']
     all_stats = {}
     
@@ -425,9 +459,11 @@ def calculate_statistics(grouped_cycles, only_median=False):
                 continue
                 
             prefix = f"{feature}"
-            if only_median:
-                all_stats[f"{prefix}_median"] = np.median(clean_values)
-            else:   
+            all_stats[f"{prefix}_median"] = np.median(clean_values)
+
+            if avg_signal:
+                all_stats[f"{prefix}_median_avg"] = np.median(clean_values)
+            else:
                 all_stats[f"{prefix}_median"] = np.median(clean_values)
                 all_stats[f"{prefix}_mean"] = np.mean(clean_values)
                 all_stats[f"{prefix}_std"] = np.std(clean_values)

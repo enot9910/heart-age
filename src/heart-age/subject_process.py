@@ -13,11 +13,11 @@ def get_subject_info(file_path):
         'sex': data['sex'].item(),
     })
 
-def extract_subjects_info(processed_dir, output_dir='subject_info', npz_files=None): #TODO pathmanager
+def extract_subjects_info(processed_dir, output_dir='ptb_xl_subject_info', npz_files=None): #TODO pathmanager
     if npz_files is None:
         npz_files = list(processed_dir.glob("*.npz"))
     
-    info_subject_dir = processed_dir / output_dir
+    info_subject_dir = processed_dir.parent / output_dir
     info_subject_dir.mkdir(parents=True, exist_ok=True)
 
     all_subject_info = pd.DataFrame()
@@ -29,7 +29,7 @@ def extract_subjects_info(processed_dir, output_dir='subject_info', npz_files=No
         except Exception as e:
             print(f"Error processing file {file_path.name}: {e}")
     
-    output_path = info_subject_dir / "subject_info_all.csv"
-    all_subject_info.to_csv(output_path, index=False)
+    output_path = info_subject_dir / "subject_info_all.parqet"
+    all_subject_info.to_parquet(output_path, index=False)
     
     return all_subject_info

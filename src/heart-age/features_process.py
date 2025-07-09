@@ -5,6 +5,7 @@ import neurokit2 as nk
 from tqdm import tqdm
 from cycles_signal_process import calc_average_signal
 from features_extraction import calc_signal_morphology_features
+from cycles_signal_process import calc_nan_wave_data
 
 channel_names = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
 
@@ -23,6 +24,7 @@ def get_waves_peak(cleaned_signal, fs, method="dwt", waves_peak_info=None):
         )
 
         waves_peak_info['ECG_R_Peaks'] = rpeaks['ECG_R_Peaks']
+
     return waves_peak_info
 
 
@@ -38,8 +40,8 @@ def calc_features(
     features_series = pd.Series(dtype=float)
 
     if avg_signal:
-        avg_signal, before_r, after_r = calc_average_signal(signal_cleaned, waves_peak_info['ECG_R_Peaks'], fs)
-        signal_cleaned = np.tile(avg_signal, num_repeats=10)
+        signal, before_r, after_r = calc_average_signal(signal_cleaned, waves_peak_info['ECG_R_Peaks'], fs)
+        signal_cleaned = np.tile(signal, 13)
 
     if show_plot:
         signals, info = nk.ecg_process(signal_cleaned, sampling_rate=fs)
@@ -52,35 +54,13 @@ def calc_features(
         return None, waves_peak_info
     
     features_series = pd.concat(
-        [FEATURE_EXTRACTORS[name](signal_cleaned, fs, waves_peak_info=waves_peak_info) 
+        [FEATURE_EXTRACTORS[name](signal_cleaned, fs, waves_peak_info=waves_peak_info, avg_signal=avg_signal) 
             for name in extractors],
         axis=0
     ).drop_duplicates()
+    #print('features_series',features_series)
     
     return features_series, waves_peak_info
-
-"""def calc_features(signal_cleaned, fs, method="dwt", waves_peak_info=None, avg_signal=False, show_plot=False):
-    features_series = pd.Series(dtype=float)
-
-    if avg_signal:
-        avg_signal, before_r, after_r = calc_average_signal(signal_cleaned, waves_peak_info['ECG_R_Peaks'], fs)
-        signal_cleaned = np.tile(avg_signal, num_repeats=10)
-
-    if show_plot:
-        signals, info = nk.ecg_process(signal_cleaned, sampling_rate=fs)
-        nk.ecg_plot(signals, info)
-
-    waves_peak_info = get_waves_peak(
-        signal_cleaned, fs, method=method, waves_peak_info=waves_peak_info
-    )
-    nk_pqrst = calc_signal_morphology_features(signal_cleaned, fs, waves_peak_info=waves_peak_info)
-    features_series = pd.concat([
-        nk_pqrst,
-    ], axis=0)
-    features_series = features_series[~features_series.index.duplicated(keep='first')]
-    #print('features_series', features_series)
-
-    return features_series, waves_peak_info"""
 
 def extract_scalar(value):
     if isinstance(value, (list, np.ndarray)):
@@ -156,8 +136,9 @@ def save_features_batch(all_features_df, output_dir, npz_files, batch_size, idx=
         return pd.DataFrame()
 
 def prepare_output_paths(processed_dir, output_dir_features, output_dir_peaks, method, avg_signal): #TODO math manager
-    output_dir_features = processed_dir.parent / output_dir_features
-    output_dir_peaks = processed_dir.parent / output_dir_peaks / f'{method}_avg' \
+    output_dir_features = processed_dir.parent / f'{output_dir_features}_avg' / method \
+        if avg_signal else processed_dir.parent / output_dir_features / method
+    output_dir_peaks = processed_dir.parent /  f'{output_dir_peaks}_avg'  / method \
         if avg_signal else processed_dir.parent / output_dir_peaks / method
     
     output_dir_features.mkdir(parents=True, exist_ok=True)
@@ -186,6 +167,7 @@ def get_ecg_signals_features(
     output_dir_features, output_dir_peaks = prepare_output_paths( #TODO math manager
         processed_dir, output_dir_features, output_dir_peaks, method, avg_signal
     )
+    print(output_dir_features, output_dir_peaks)
     count = 0 
 
     for idx, file_path in enumerate(tqdm(npz_files, desc="Processing patients")):

@@ -24,7 +24,7 @@ def calc_signal_morphology_features(cleaned_signal, fs, waves_peak_info, avg_sig
 
     grouped_cycles = calculate_all_wave_areas(grouped_cycles, cleaned_signal, fs)
     grouped_cycles = calculate_area_ratios(grouped_cycles)
-    stats = calculate_statistics(grouped_cycles)
+    stats = calculate_statistics(grouped_cycles, avg_signal=avg_signal)
     features = pd.Series(stats)
     
     return features
