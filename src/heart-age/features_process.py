@@ -27,7 +27,7 @@ def get_waves_peak(cleaned_signal, fs, method="dwt", waves_peak_info=None):
 
 
 def calc_features(
-    signal_lead, 
+    signal_cleaned, 
     fs, 
     method="dwt", 
     waves_peak_info=None, 
@@ -93,16 +93,21 @@ def extract_scalar(value):
     else:
         return value 
     
-def get_ecg_signal_features(file_path, fs, method="dwt", waves_peak_info=None, avg_signal=False, show_plot=False):
+def get_ecg_signal_features(
+    file_path, 
+    fs, 
+    method="dwt", 
+    waves_peak_info=None, 
+    avg_signal=False, 
+    show_plot=False, 
+    extractors=['morphology']
+):
     data = np.load(file_path, allow_pickle=True)
     signal = data['signal']
     
     features_series = pd.Series({
         'patient_id': data['patient_id'].item(),
         'target': data['target'].item() if 'target' in data else np.nan,
-        'file_name': Path(file_path).name,
-        'age': data['age'].item(),
-        'sex': data['sex'].item(),
     })
     waves_peak = {}
     for i, channel_name in enumerate(channel_names):
@@ -115,7 +120,8 @@ def get_ecg_signal_features(file_path, fs, method="dwt", waves_peak_info=None, a
             signal_cleaned, fs, method=method, waves_peak_info=waves_peak_channel
         )
         channel_features, waves_peak_channel = calc_features(
-            signal_cleaned, fs, method=method, waves_peak_info=waves_peak_channel, avg_signal=avg_signal, show_plot=show_plot
+            signal_cleaned, fs, method=method, waves_peak_info=waves_peak_channel, avg_signal=avg_signal, show_plot=show_plot, 
+            extractors=extractors
         )
         channel_features.index = [f"{feature_name}_{channel_name}" for feature_name in channel_features.index]
         if not channel_features.empty:
@@ -124,7 +130,8 @@ def get_ecg_signal_features(file_path, fs, method="dwt", waves_peak_info=None, a
         waves_peak[channel_name] = waves_peak_channel
     return features_series, waves_peak
 
-def get_npz_files(input_dir):
+
+def get_npz_files(input_dir): #TODO math manager
     npz_files = list(Path(input_dir).glob("*.npz"))
     print(f"Found {len(npz_files)} patient files")
     return npz_files
@@ -148,7 +155,7 @@ def save_features_batch(all_features_df, output_dir, npz_files, batch_size, idx=
             print(f"Saved final batch {batch_filename}")
         return pd.DataFrame()
 
-def prepare_output_paths(processed_dir, output_dir_features, output_dir_peaks, method, avg_signal):
+def prepare_output_paths(processed_dir, output_dir_features, output_dir_peaks, method, avg_signal): #TODO math manager
     output_dir_features = processed_dir.parent / output_dir_features
     output_dir_peaks = processed_dir.parent / output_dir_peaks / f'{method}_avg' \
         if avg_signal else processed_dir.parent / output_dir_peaks / method
@@ -164,10 +171,11 @@ def get_ecg_signals_features(
     batch_size=2000, 
     fs=500,
     npz_files=None,
-    output_dir_features='ptb_xl_features_signal_morphplpgy', 
+    output_dir_features='ptb_xl_features_signal_morphology', 
     output_dir_peaks='ptb_xl_peaks', 
     method="dwt", 
-    avg_signal=False, show_plot=False, calc_waves_peak=True
+    avg_signal=False, show_plot=False, calc_waves_peak=True, 
+    extractors=['morphology']
 ):
     all_features_df = pd.DataFrame()
 
@@ -175,12 +183,14 @@ def get_ecg_signals_features(
         npz_files = list(processed_dir.glob("*.npz"))
         print(f"Found {len(npz_files)} patient files")
 
-    output_dir_features, output_dir_peaks = prepare_output_paths(
+    output_dir_features, output_dir_peaks = prepare_output_paths( #TODO math manager
         processed_dir, output_dir_features, output_dir_peaks, method, avg_signal
     )
     count = 0 
 
     for idx, file_path in enumerate(tqdm(npz_files, desc="Processing patients")):
+        #if count > 2:
+        #    break
         waves_peak_filename = output_dir_peaks / f"{file_path.stem}_features.npz" #TODO _features -> _peaks
         if waves_peak_filename.exists() and calc_waves_peak==False:
             loaded_waves_peak = np.load(waves_peak_filename, allow_pickle=True)
@@ -192,18 +202,21 @@ def get_ecg_signals_features(
             waves_peak_info=None
         try:
             features, waves_peak = get_ecg_signal_features(
-                str(file_path), fs, method=method, waves_peak_info=waves_peak_info, 
-                avg_signal=avg_signal, show_plot=show_plot
+                str(file_path), fs=fs, method=method, waves_peak_info=waves_peak_info, 
+                avg_signal=avg_signal, show_plot=show_plot, extractors=extractors
             )
+            
             if calc_waves_peak:
                 np.savez(waves_peak_filename, **waves_peak)
 
         except Exception as e:
             print(f"Error in get_ecg_signal_features: {e}")
         features_df = features.to_frame().T
+        #print("features shape:", features.shape, features.index)
+        
         for col in features_df.columns:
             features_df[col] = features_df[col].apply(extract_scalar)
         all_features_df = pd.concat([all_features_df, features_df], ignore_index=True)
+        #count += 1
         all_features_df = save_features_batch(all_features_df, output_dir_features, npz_files, batch_size, idx)
-
     all_features_df = save_features_batch(all_features_df, output_dir_features, npz_files, batch_size, idx=None)
