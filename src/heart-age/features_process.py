@@ -87,7 +87,6 @@ def get_ecg_signal_features(
     
     features_series = pd.Series({
         'patient_id': data['patient_id'].item(),
-        'target': data['target'].item() if 'target' in data else np.nan,
     })
     waves_peak = {}
     for i, channel_name in enumerate(channel_names):
