@@ -51,4 +51,4 @@ def merge_features(
                 how=how
             )
     
-    return merged_df
+    return merged_df.drop_duplicates()
