@@ -2,13 +2,18 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
-
-
 from cycles_signal_process import calc_nan_wave_data
-def get_waves_quality_stats(processed_dir, output_dir_peaks='ptb_xl_peaks', method='dwt', output_file='ptb_xl_waves_quality_stats.parqet'):
+
+def get_waves_quality_stats(
+    processed_dir, 
+    dir_peaks='ptb_xl_peaks', 
+    method='dwt', 
+    output_file='ptb_xl_waves_quality_stats.parquet',
+    channel_names=['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+):
     stats_df = pd.DataFrame()
     
-    peaks_dir = processed_dir / output_dir_peaks / method
+    peaks_dir = processed_dir / dir_peaks / method
     npz_files = list(peaks_dir.glob("*.npz"))
     
     if not npz_files:
@@ -21,7 +26,7 @@ def get_waves_quality_stats(processed_dir, output_dir_peaks='ptb_xl_peaks', meth
                 key: loaded_waves_peak[key].item() for key in loaded_waves_peak if not key.startswith('__')
             }
             
-            wave_stats = calc_nan_wave_data(waves_peak_info)
+            wave_stats = calc_nan_wave_data(waves_peak_info, channel_names)
             patient_id = file_path.stem.split('_')[1]
             wave_stats['patient_id'] = patient_id
             
@@ -31,7 +36,8 @@ def get_waves_quality_stats(processed_dir, output_dir_peaks='ptb_xl_peaks', meth
         except Exception as e:
             print(f"Ошибка при обработке файла {file_path.name}: {e}")
     
-    output_path = processed_dir.parent / output_file
-    stats_df.to_parquet(output_path, index=False)
+    output_dir = processed_dir / 'ptb_xl_peaks_info' / method
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stats_df.to_parquet(output_dir / output_file, index=False)
     
     return stats_df
