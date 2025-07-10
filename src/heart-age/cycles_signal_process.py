@@ -18,8 +18,10 @@ def prepare_wave_data(waves_peak_info):
     
     return waves_data
 
-def calc_nan_wave_data(waves_peak_info):
-    waves_data = waves_peak_info.copy()
+def calc_nan_wave_data(
+    waves_peak_info,
+    channel_names=['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+):
     point_types = [
         'ECG_P_Onsets', 'ECG_P_Peaks', 'ECG_P_Offsets',
         'ECG_R_Onsets', 'ECG_Q_Peaks', 'ECG_R_Peaks', 
@@ -27,28 +29,31 @@ def calc_nan_wave_data(waves_peak_info):
         'ECG_T_Onsets', 'ECG_T_Peaks', 'ECG_T_Offsets'
     ]
     
-    r_peaks_length = len(waves_data.get('ECG_R_Peaks', []))
-    
     results = {}
     
-    for point_type in point_types:
-        if point_type in waves_data:
-            points = np.array(waves_data[point_type], dtype=float)
-            
-            nan_count = np.sum(np.isnan(points))
-            length_diff = max(0, r_peaks_length - len(points))
-            
-            if len(points) >= r_peaks_length:
-                results[f"{point_type}_nan"] = int(nan_count)
-                results[f"{point_type}_missing"] = 0
-            else:
-                results[f"{point_type}_nan"] = int(nan_count)
-                results[f"{point_type}_missing"] = length_diff
-        else:
-            results[f"{point_type}_nan"] = 0
-            results[f"{point_type}_missing"] = r_peaks_length
+    for channel in channel_names:
+        current_r_peaks_length = 0
+        if channel in waves_peak_info and 'ECG_R_Peaks' in waves_peak_info[channel]:
+            current_r_peaks_length = len(waves_peak_info[channel]['ECG_R_Peaks'])
+        
+        results[f"{channel}_total_r_peaks"] = current_r_peaks_length
 
-    results['total_r_peaks'] = r_peaks_length
+        channel_data = waves_peak_info[channel]
+        for point_type in point_types:
+            if point_type in channel_data:
+                points = np.array(channel_data[point_type], dtype=float)
+                #nan_count = np.sum(np.isnan(points))
+                length_diff = max(0, current_r_peaks_length - len(points))
+                
+                if len(points) >= current_r_peaks_length:
+                    #results[f"{channel}_{point_type}_nan"] = int(nan_count)
+                    results[f"{channel}_{point_type}_missing"] = 0
+                else:
+                    #results[f"{channel}_{point_type}_nan"] = int(nan_count)
+                    results[f"{channel}_{point_type}_missing"] = length_diff
+            else:
+                #results[f"{channel}_{point_type}_nan"] = 0
+                results[f"{channel}_{point_type}_missing"] = current_r_peaks_length
     
     return results
 
