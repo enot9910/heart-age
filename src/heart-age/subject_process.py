@@ -29,7 +29,7 @@ def extract_subjects_info(processed_dir, output_dir='ptb_xl_subject_info', npz_f
         except Exception as e:
             print(f"Error processing file {file_path.name}: {e}")
     
-    output_path = info_subject_dir / "subject_info_all.parqet"
+    output_path = info_subject_dir / "subject_info_all.parquet"
     all_subject_info.to_parquet(output_path, index=False)
     
     return all_subject_info
