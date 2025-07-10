@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Union
 from tqdm import tqdm
 
 
-def get_features_paths(
+def get_features_paths( # TODO class
     processed_dir: Union[str, Path],
     dataset: str,
     features_to_load: List[str] = ['signal_morphology', 'signal_morphology_avg','subject_info', 'waves_quality'],
