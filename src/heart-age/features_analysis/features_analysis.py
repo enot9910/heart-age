@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pearsonr
 from sklearn.linear_model import LinearRegression
+from sklearn.feature_selection import VarianceThreshold
+import networkx as nx
 
 def calculate_age_correlations(
     df: pd.DataFrame,
@@ -98,7 +100,65 @@ def plot_features_vs_age(
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         plt.close()
 
-from sklearn.feature_selection import VarianceThreshold
+
+def scatter_features_vs_age(
+    df: pd.DataFrame,
+    age_column: str = 'age',
+    save_dir: str = 'scatter_plots',
+    exclude_columns: set = {'patient_id', 'target', 'original_length', 'file_name'},
+    features: list = None,
+    alpha: float = 0.6,
+    kdeplot: bool = False,
+    s_scatter: float = 0.01
+):
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    if features is None:
+        features = [col for col in df.columns if col not in exclude_columns and col != age_column]
+    else:
+        features = [
+            col for col in features if col in df.columns and col not in exclude_columns and col != age_column
+        ]
+
+    for feature_name in features:
+        plt.figure(figsize=(10, 8))
+        ax = plt.gca()
+        
+        if kdeplot:
+            sns.kdeplot(
+                x=df[age_column],
+                y=df[feature_name],
+                fill=True,
+                cmap='Blues',
+                alpha=0.8,
+                ax=ax
+            )
+            plt.colorbar(ax.collections[0])
+        
+        sns.regplot(
+            x=df[age_column],
+            y=df[feature_name],
+            scatter_kws={'alpha': alpha, 's': s_scatter, 'color': 'red'},
+            line_kws={'color': 'red', 'linewidth': 2},
+            ax=ax
+        )
+        
+        valid_data = df[[age_column, feature_name]].dropna()
+        corr = np.corrcoef(valid_data[age_column].values, valid_data[feature_name].values)[0, 1]
+        parts = feature_name.split('_')
+        filtered_parts = [p for p in parts if 'ECG' not in p]
+        display_name = ' '.join(filtered_parts[:-2]) if len(filtered_parts) > 2 else ' '.join(filtered_parts)
+        
+        plt.title(f'{display_name} vs Age (Corr: {corr:.2f})', fontsize=14)
+        plt.xlabel('Age', fontsize=12)
+        plt.ylabel(display_name, fontsize=12)
+        plt.grid(True, linestyle='--', alpha=0.5)
+        plt.tight_layout()
+
+        save_path = save_dir / f"{feature_name}_vs_age.png"
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.close()
+
 def filtered_variance_threshold(
     df: pd.DataFrame,
     percentile_range: tuple = (0.2, 99.7),
@@ -122,3 +182,105 @@ def filtered_variance_threshold(
     del_features = df.columns[~selector.get_support()]
     
     return selected_features, del_features, variance_df
+
+def calculate_feature_correlations(
+    df: pd.DataFrame,
+    exclude_columns: set = None,
+    correlation_threshold: float = 0.9,
+    min_samples: int = 100
+) -> pd.DataFrame:
+    if exclude_columns is None:
+        exclude_columns = set()
+    
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    features = [col for col in numeric_cols if col not in exclude_columns]
+    df_subset = df[features]
+    corr_matrix = df_subset.corr(method='pearson', min_periods=min_samples)
+    
+    corr_pairs = (
+        corr_matrix.stack()
+        .reset_index()
+        .rename(columns={'level_0': 'feature1', 'level_1': 'feature2', 0: 'correlation'})
+    )
+    
+    corr_pairs = corr_pairs[corr_pairs['feature1'] < corr_pairs['feature2']]
+    high_corr_pairs = corr_pairs[abs(corr_pairs['correlation']) >= correlation_threshold]
+    
+    results = []
+    for _, row in high_corr_pairs.iterrows():
+        feat1, feat2 = row['feature1'], row['feature2']
+        valid_mask = ~df[feat1].isna() & ~df[feat2].isna()
+        n_valid = valid_mask.sum()
+        
+        _, p_value = pearsonr(df.loc[valid_mask, feat1], df.loc[valid_mask, feat2])
+        
+        results.append({
+            'feature1': feat1,
+            'feature2': feat2,
+            'correlation': row['correlation'],
+            'p_value': p_value,
+            'n_samples': n_valid
+        })
+    
+    return pd.DataFrame(results)
+
+
+
+def get_best_feature(features_group, target_correlations, p_value_threshold=0.5):
+    if target_correlations is None or target_correlations.empty:
+        return next(iter(features_group))
+
+    valid_features = [
+        feature for feature in features_group
+        if feature in target_correlations.index
+    ]
+
+    if 'p_value' in target_correlations.columns:
+        valid_features = [
+            feature for feature in valid_features
+            if target_correlations.loc[feature, 'p_value'] < p_value_threshold
+        ]
+
+    best_feature = max(
+        valid_features,
+        key=lambda x: abs(target_correlations.loc[x, 'correlation'])
+    )
+    return best_feature
+
+def select_best_features(
+    corr_pairs,
+    target_correlations=None,
+    correlation_threshold=1.0,
+    p_value_threshold=0.5
+):
+    unique_features = set(corr_pairs['feature1']).union(set(corr_pairs['feature2']))
+
+    G = nx.Graph()
+    for _, row in corr_pairs.iterrows():
+        if abs(row['correlation']) >= correlation_threshold:
+            G.add_edge(row['feature1'], row['feature2'])
+
+
+    connected_components = list(nx.connected_components(G))
+    print(f"\nГруппы коррелирующих фич (corr >= {correlation_threshold}):")
+    for i, group in enumerate(connected_components, 1):
+        print(f"Группа {i}: {group}")
+
+    features_to_keep = []
+    for group in connected_components:
+        best_feature = get_best_feature(group, target_correlations, p_value_threshold)
+        if best_feature is not None:
+            features_to_keep.append(best_feature)
+
+    independent_features = unique_features - set(G.nodes())
+    if target_correlations is not None:
+        independent_features = [
+            feature for feature in independent_features
+            if feature in target_correlations.index and (
+                'p_value' not in target_correlations.columns or
+                target_correlations.loc[feature, 'p_value'] < p_value_threshold
+            )
+        ]
+    features_to_keep.extend(independent_features)
+    print(f"Итоговое количество: {len(features_to_keep)}")
+    return features_to_keep
