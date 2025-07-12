@@ -4,13 +4,24 @@ from pathlib import Path
 import neurokit2 as nk
 from tqdm import tqdm
 from cycles_signal_process import calc_average_signal
-from features_extraction import calc_signal_morphology_features
+from features_extraction import (
+    calc_signal_morphology_features, 
+    calc_hrv_features, 
+    calc_ecg_angles_features,
+    calc_wave_asymmetry_features,
+    calc_derivative_features
+)
 from cycles_signal_process import calc_nan_wave_data
 
 channel_names = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
 
 FEATURE_EXTRACTORS = {
     'morphology': calc_signal_morphology_features,
+    'hrv': calc_hrv_features,
+    'angles': calc_ecg_angles_features,
+    'asymmetry': calc_wave_asymmetry_features,
+    'derivative': calc_derivative_features
+
 }
 
 def get_waves_peak(cleaned_signal, fs, method="dwt", waves_peak_info=None):
@@ -86,7 +97,7 @@ def get_ecg_signal_features(
     signal = data['signal']
     
     features_series = pd.Series({
-        'patient_id': data['patient_id'].item(),
+        'patient_id': int(data['patient_id'].item()),
     })
     waves_peak = {}
     for i, channel_name in enumerate(channel_names):
@@ -105,7 +116,7 @@ def get_ecg_signal_features(
         channel_features.index = [f"{feature_name}_{channel_name}" for feature_name in channel_features.index]
         if not channel_features.empty:
             features_series = pd.concat([features_series, channel_features])
-
+        #print(features_series)
         waves_peak[channel_name] = waves_peak_channel
     return features_series, waves_peak
 
