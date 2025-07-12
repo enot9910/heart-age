@@ -7,7 +7,11 @@ from tqdm import tqdm
 def get_features_paths( # TODO class
     processed_dir: Union[str, Path],
     dataset: str,
-    features_to_load: List[str] = ['signal_morphology', 'signal_morphology_avg','subject_info', 'waves_quality'],
+    features_to_load: List[str] = [
+        'subject_info', 'waves_quality', 
+        'signal_morphology', 'signal_hrv',
+        'signal_assymetry', 'signal_angles', 'signal_deriv', 
+    ],
     method: str = "dwt",
 ) -> Dict[str, Path]:
     processed_dir = Path(processed_dir)
@@ -20,6 +24,22 @@ def get_features_paths( # TODO class
         },
         'signal_morphology_avg': {
             'dir': processed_dir / f"{dataset}_features_signal_morphology_avg" / method,
+            'pattern': "patient_features_*.parquet"
+        },
+        'signal_assymetry': {
+            'dir': processed_dir / f"{dataset}_features_signal_assymetry" / method,
+            'pattern': "patient_features_*.parquet"
+        },
+        'signal_deriv': {
+            'dir': processed_dir / f"{dataset}_features_signal_deriv" / method,
+            'pattern': "patient_features_*.parquet"
+        },
+        'signal_hrv': {
+            'dir': processed_dir / f"{dataset}_features_signal_hrv" / method,
+            'pattern': "patient_features_*.parquet"
+        },
+        'signal_angles': {
+            'dir': processed_dir / f"{dataset}_features_signal_angles" / method,
             'pattern': "patient_features_*.parquet"
         },
         'subject_info': {
