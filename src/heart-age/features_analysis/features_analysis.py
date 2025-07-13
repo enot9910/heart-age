@@ -284,3 +284,15 @@ def select_best_features(
     features_to_keep.extend(independent_features)
     print(f"Итоговое количество: {len(features_to_keep)}")
     return features_to_keep
+
+def find_inf_columns(df):
+    numeric_cols = df.select_dtypes(include=['float64', 'int64', 'float32', 'int32']).columns
+    
+    inf_cols = []
+    for col in numeric_cols:
+        if np.isinf(df[col]).any():
+            inf_count = np.isinf(df[col]).sum()
+            print(f"Колонка {col}: {inf_count} inf/-inf значений")
+            inf_cols.append(col)
+    
+    return inf_cols
