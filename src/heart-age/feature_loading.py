@@ -52,3 +52,36 @@ def merge_features(
             )
     
     return merged_df.drop_duplicates()
+
+def get_feature_columns(
+    features_paths: Dict[str, Union[Path, List[Path]]],
+    merge_on: str = "patient_id",
+    no_suffix_cols: List[str] = ["target", "sex", "age", "file_name"]
+) -> Dict[str, List[str]]:
+    feature_columns = {}
+    no_suffix_cols = list(set(no_suffix_cols + [merge_on]))
+    
+    for feature_type, paths in features_paths.items():
+        if not isinstance(paths, list):
+            paths = [paths]
+        
+        df = None
+        for path in paths:
+            try:
+                df = pd.read_parquet(path)
+                df[merge_on] = df[merge_on].astype(int)
+                break
+            except Exception as e:
+                print(f"Error loading {path}: {e}")
+                continue
+                
+        if df is None:
+            continue
+        
+        cols_to_suffix = [col for col in df.columns if col not in no_suffix_cols]
+        feature_columns[feature_type] = [
+            f"{col}_{feature_type}" if col in cols_to_suffix else col
+            for col in df.columns
+        ]
+    
+    return feature_columns
