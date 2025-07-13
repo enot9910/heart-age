@@ -27,7 +27,7 @@ def get_features_paths( # TODO class
             'pattern': "patient_features_*.parquet"
         },
         'signal_assymetry': {
-            'dir': processed_dir / f"{dataset}_features_signal_assymetry" / method,
+            'dir': processed_dir / f"{dataset}_features_signal_asymmetry" / method,
             'pattern': "patient_features_*.parquet"
         },
         'signal_deriv': {
