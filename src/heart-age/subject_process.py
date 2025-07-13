@@ -11,6 +11,10 @@ def get_subject_info(file_path):
         'file_name': Path(file_path).name,
         'age': data['age'].item(),
         'sex': data['sex'].item(),
+        'pacemaker': data['pacemaker'].item(),
+        'strat_fold': data['strat_fold'].item(),
+        'heart_axis': data['heart_axis'].item(),
+        
     })
 
 def extract_subjects_info(processed_dir, output_dir='ptb_xl_subject_info', npz_files=None): #TODO pathmanager
