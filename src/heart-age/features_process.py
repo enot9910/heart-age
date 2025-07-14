@@ -11,9 +11,10 @@ from features_extraction import (
     calc_wave_asymmetry_features,
     calc_derivative_features,
     calc_hrv_frequency_features,
-    calc_hrv_freq_hf_features
+    calc_hrv_freq_hf_features,
+    calc_wavelet_features
 )
-from cycles_signal_process import calc_nan_wave_data
+#from cycles_signal_process import calc_nan_wave_data
 
 channel_names = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
 
