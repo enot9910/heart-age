@@ -3,6 +3,10 @@ import neurokit2 as nk
 import numpy as np 
 from scipy.signal import savgol_filter
 from collections import defaultdict
+from astropy.timeseries import LombScargle
+import pywt
+from scipy import stats
+from antropy import sample_entropy
 
 from cycles_signal_process import (
     prepare_wave_data,
@@ -15,6 +19,7 @@ from cycles_signal_process import (
 
     calc_average_signal,
     calculate_statistics,
+    
 )
 
 def calculate_feature_statistics(feature_values, prefix=""):
@@ -65,6 +70,93 @@ def calc_hrv_features(cleaned_signal, fs, waves_peak_info=None, avg_signal=False
         print(f"Error in hrv: {e}")
 
     return hrv
+
+def calc_hrv_frequency_features(cleaned_signal, fs, waves_peak_info=None, avg_signal=False, method="lomb"):
+    if waves_peak_info is None:
+        peaks, _ = nk.ecg_peaks(cleaned_signal, sampling_rate=fs)
+    else:
+        peaks = waves_peak_info['ECG_R_Peaks']
+    
+    hrv_freq = pd.Series(dtype=float)
+    
+    try:
+        hrv_freq = nk.hrv_frequency(
+            peaks,
+            sampling_rate=fs,
+            psd_method=method,
+            show=False
+        ).loc[0]
+        print(hrv_freq)
+        #if len(peaks["ECG_R_Peaks"]) < 15:  # ~10 RR-интервалов для 10 сек
+        #    hrv_freq[["HRV_ULF", "HRV_VLF", "HRV_LF"]] = np.nan
+        #    hrv_freq["HRV_LFHF"] = np.nan
+            
+    except Exception as e:
+        print(f"Error in HRV frequency analysis: {e}")
+        """hrv_freq = pd.Series({
+            "HRV_ULF": np.nan,
+            "HRV_VLF": np.nan,
+            "HRV_LF": np.nan,
+            "HRV_HF": np.nan,
+            "HRV_VHF": np.nan,
+            "HRV_TP": np.nan,
+            "HRV_LFHF": np.nan,
+            "HRV_LFn": np.nan,
+            "HRV_HFn": np.nan,
+            "HRV_LnHF": np.nan
+        })"""
+    
+    return hrv_freq
+
+def calc_hrv_freq_hf_features(cleaned_signal, fs, waves_peak_info=None, avg_signal=False):
+    if waves_peak_info is None:
+        peaks, _ = nk.ecg_peaks(cleaned_signal, sampling_rate=fs)
+        r_peaks = peaks['ECG_R_Peaks']
+    else:
+        r_peaks = waves_peak_info['ECG_R_Peaks']
+    
+    try:
+        rr_intervals = np.diff(r_peaks) / fs
+        t = np.cumsum(rr_intervals)
+        hrv_freq = pd.Series(dtype=float)
+
+        hf_range = (0.15, 0.4)  # Hz
+        frequencies = np.linspace(hf_range[0], hf_range[1], 100)
+        power = LombScargle(t, rr_intervals).power(frequencies)
+        hf_power = np.trapz(power, frequencies)
+        hrv_freq['cust_HF'] = hf_power
+    except Exception as e:
+        print(f"Error in HF calculation: {e}")
+    return hrv_freq
+
+
+
+def calc_wavelet_features(cleaned_signal, fs, waves_peak_info, avg_signal=False):
+    coeffs = pywt.wavedec(cleaned_signal, 'db4', level=5)
+    energy_d3 = np.sum(coeffs[-3]**2)  # QRS-комплекс (D3 ≈ 25-50 Гц)
+    energy_d4 = np.sum(coeffs[-2]**2)  # ST-T сегмент (D4 ≈ 12.5-25 Гц)
+    
+    # 2. Патологические маркеры
+    ## 2.1 Для ишемии/гипоксии
+    st_depression = np.mean(coeffs[-2][coeffs[-2] < 0])  # Отрицательные коэффициенты D4
+    t_wave_asymmetry = stats.skew(coeffs[-2])            # Асимметрия T-волны
+    ## 2.2 Для аритмий
+    qrs_std = np.std(coeffs[-3])  # Разброс QRS (желудочковые экстрасистолы)
+    # 3. Энтропийные меры
+    entropy_d4 = sample_entropy(coeffs[-2], order=2, metric='chebyshev') #"D4 (ST-T)"
+    features = pd.Series({
+        'energy_d3': energy_d3,
+        'energy_d4': energy_d4,
+        'qrs_t_ratio': energy_d3 / (energy_d4 + 1e-6),
+        'st_depression': st_depression,
+        't_wave_asymmetry': t_wave_asymmetry,
+        'qrs_std': qrs_std,
+        'entropy_d4': entropy_d4,
+        #'wavelet_type': 'db4',
+        #'levels': 'D1-D5 (100-6.25 Гц)'
+    })
+    
+    return features
 
 def calc_signal_morphology_features(cleaned_signal, fs, waves_peak_info, avg_signal=False):
     features = pd.Series(dtype=float)
