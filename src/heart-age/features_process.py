@@ -9,7 +9,9 @@ from features_extraction import (
     calc_hrv_features, 
     calc_ecg_angles_features,
     calc_wave_asymmetry_features,
-    calc_derivative_features
+    calc_derivative_features,
+    calc_hrv_frequency_features,
+    calc_hrv_freq_hf_features
 )
 from cycles_signal_process import calc_nan_wave_data
 
@@ -20,7 +22,10 @@ FEATURE_EXTRACTORS = {
     'hrv': calc_hrv_features,
     'angles': calc_ecg_angles_features,
     'asymmetry': calc_wave_asymmetry_features,
-    'derivative': calc_derivative_features
+    'derivative': calc_derivative_features,
+    'freq': calc_hrv_frequency_features,
+    'HF': calc_hrv_freq_hf_features,
+    'wavelet': calc_wavelet_features
 
 }
 
