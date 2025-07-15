@@ -172,7 +172,9 @@ def get_ecg_signals_features(
     output_dir_peaks='ptb_xl_peaks', 
     method="dwt", 
     avg_signal=False, show_plot=False, calc_waves_peak=True, 
-    extractors=['morphology']
+    extractors=['morphology'],
+    target_channel=None,
+    comparing_channel=False
 ):
     all_features_df = pd.DataFrame()
 
@@ -199,11 +201,18 @@ def get_ecg_signals_features(
         else:
             waves_peak_info=None
         try:
-            features, waves_peak = get_ecg_signal_features(
-                str(file_path), fs=fs, method=method, waves_peak_info=waves_peak_info, 
-                avg_signal=avg_signal, show_plot=show_plot, extractors=extractors
-            )
-            
+            if comparing_channel:
+                features, waves_peak = calc_ecg_signal_features(
+                    str(file_path), fs=fs, method=method, waves_peak_info=waves_peak_info, 
+                    avg_signal=avg_signal, show_plot=show_plot, extractors=extractors,
+                    target_channel=target_channel 
+                )
+            else:
+                features, waves_peak = calc_ecg_signal_features_comparing(
+                    str(file_path), fs=fs, method=method, waves_peak_info=waves_peak_info, 
+                    avg_signal=avg_signal, show_plot=show_plot, extractors=extractors,
+                    target_channel=target_channel 
+                )
             if calc_waves_peak:
                 np.savez(waves_peak_filename, **waves_peak)
 
