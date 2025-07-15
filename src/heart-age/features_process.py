@@ -12,7 +12,8 @@ from features_extraction import (
     calc_derivative_features,
     calc_hrv_frequency_features,
     calc_hrv_freq_hf_features,
-    calc_wavelet_features
+    calc_wavelet_features,
+    calculate_interchannel_features
 )
 #from cycles_signal_process import calc_nan_wave_data
 
@@ -89,15 +90,16 @@ def extract_scalar(value):
             return np.nan
     else:
         return value 
-    
-def get_ecg_signal_features(
+
+def calc_ecg_signal_features(
     file_path, 
     fs, 
     method="dwt", 
     waves_peak_info=None, 
     avg_signal=False, 
     show_plot=False, 
-    extractors=['morphology']
+    extractors=['morphology'],
+    target_channel=None
 ):
     data = np.load(file_path, allow_pickle=True)
     signal = data['signal']
@@ -110,6 +112,14 @@ def get_ecg_signal_features(
         lead_signal = signal[i]
         #print(f"\nLead {channel_name} signal length: {len(lead_signal)} samples ({len(lead_signal)/fs:.2f} seconds)")
         signal_cleaned = nk.ecg_clean(lead_signal, sampling_rate=fs)
+
+        if waves_peak_info is None:
+            waves_peak_info = waves_peak_info
+        else:
+            if target_channel is None:
+                waves_peak_channel = waves_peak_info.get(channel_name, None)
+            else:
+                waves_peak_channel = waves_peak_info[target_channel]
 
         waves_peak_channel = waves_peak_info if waves_peak_info is None else waves_peak_info.get(channel_name, None)
         waves_peak_channel = get_waves_peak(
@@ -125,7 +135,6 @@ def get_ecg_signal_features(
         #print(features_series)
         waves_peak[channel_name] = waves_peak_channel
     return features_series, waves_peak
-
 
 def get_npz_files(input_dir): #TODO math manager
     npz_files = list(Path(input_dir).glob("*.npz"))
@@ -227,3 +236,63 @@ def get_ecg_signals_features(
         #count += 1
         all_features_df = save_features_batch(all_features_df, output_dir_features, npz_files, batch_size, idx)
     all_features_df = save_features_batch(all_features_df, output_dir_features, npz_files, batch_size, idx=None)
+
+
+
+def calc_ecg_signal_features_comparing(
+    file_path, 
+    fs, 
+    target_channel,
+    method="dwt", 
+    waves_peak_info=None, 
+    avg_signal=False, 
+    show_plot=False, 
+    extractors=['morphology'],
+):
+    data = np.load(file_path, allow_pickle=True)
+    signal = data['signal']
+    
+    features_series = pd.Series({
+        'patient_id': int(data['patient_id'].item()),
+    })
+    waves_peak = {}
+    target_idx = channel_names.index(target_channel)
+    target_signal_cleaned = nk.ecg_clean(signal[target_idx], sampling_rate=fs)
+    waves_peak_info_target = get_waves_peak(
+        target_signal_cleaned, fs, method=method, waves_peak_info=None
+    )
+    
+    for i, channel_name in enumerate(channel_names):
+        if channel_name == target_channel:
+            continue
+            
+        lead_signal = signal[i]
+        signal_cleaned = nk.ecg_clean(lead_signal, sampling_rate=fs)
+
+        waves_peak_channel = waves_peak_info if waves_peak_info is None else waves_peak_info.get(channel_name, None)
+        waves_peak_channel = get_waves_peak(
+            signal_cleaned, fs, method=method, waves_peak_info=waves_peak_channel
+        )
+        
+        channel_features, waves_peak_channel = calc_features(
+            signal_cleaned, fs, method=method, waves_peak_info=waves_peak_channel, 
+            avg_signal=avg_signal, show_plot=show_plot, extractors=extractors
+        )
+        interchannel_features = calculate_interchannel_features(
+            waves_peak_info_target,
+            waves_peak_channel,
+            target_signal_cleaned,
+            signal_cleaned,
+            fs,
+            target_channel,
+            channel_name
+        )
+        channel_features = pd.concat([channel_features, interchannel_features])
+        
+        channel_features.index = [f"{feature_name}_{channel_name}" for feature_name in channel_features.index]
+        if not channel_features.empty:
+            features_series = pd.concat([features_series, channel_features])
+            
+        waves_peak[channel_name] = waves_peak_channel
+    
+    return features_series, waves_peak
